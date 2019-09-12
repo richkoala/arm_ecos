@@ -13,6 +13,8 @@
 	extern volatile u32 success;
 #endif
 
+	extern idxint kkt_flag;
+
 typedef struct ps2pl_sop{
    int frame_id;
    int iter_num;
@@ -29,6 +31,23 @@ typedef struct pl2ps_sop{
 
 int DMA_COMM_TEST();
 
+int kkt_sign_fpga(
+		int* Vec_Sign,
+		int* Sign,
+		int  Sign_len
+		);
+
+int kkt_col_cumsum_fpga(
+		int* Vec_Col_cumsum,
+		int* Col_cumsum,
+		int  Col_cumsum_len
+		);
+
+int kkt_row_cumsum_fpga(
+		int* Vec_Row_cumsum,
+		int* Row_cumsum,
+		int  Row_cumsum_len
+		);
 
 int kkt_factor_fpga(
 		ps2pl_sop Sop,	
@@ -49,12 +68,14 @@ int kkt_solve_fpga(
 		ps2pl_sop Sop,
 		devec_struct* x);
 
-int kkt_solve_fpga_p2(
-		devec_struct* b_m2,		//帧格式sop1+b1/b2
+
+int kkt_solve_fpga_p(
+		double* Pb1,
+		double* Pb2,
+		devec_struct* Pb,		//帧格式sop1+b1/b2
 		int b_len,
-		ps2pl_sop Sop1,
-		ps2pl_sop Sop2,
-		double* x_m2);
+		ps2pl_sop Sop,
+		devec_struct* Px);
 
 //protocol
 
@@ -85,7 +106,7 @@ int kkt_solve_fpga_p2(
 #define CMDTR_CAL_Vecb_ITER2   	0x01B9
 #define CMDT_CAL_Vecb_ITER12  	0x00BA
 #define CMDT_CAL_Vecb_ITER3   	0x00BB
-#define CMDT_CAL_Vecb_ITER3   	0x01BB
+#define CMDTR_CAL_Vecb_ITER3   	0x01BB
  
 #define CMDT_INFO_MatL_COLNUM 	0x00C0
 #define CMDT_INFO_MatL_T_COLNUM 0x00C1

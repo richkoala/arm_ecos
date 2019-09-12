@@ -41,6 +41,8 @@
 /* SPARSE LDL LIBRARY -------------------------------------------------- */
 #include "ldl.h"
 
+/* FPGA transfer sign data --------------------------------------------- */
+#include "comm_ps_pl.h"
 
 /* CHOOSE RIGHT MEMORY MANAGER ----------------------------------------- */
 #ifdef MATLAB_MEX_FILE
@@ -478,6 +480,12 @@ void ECOS_cleanup(pwork* w, idxint keepvars)
     FREE(w->KKT->work4);            /* mywork->KKT->work4 = (pfloat *)MALLOC(nK*sizeof(pfloat));      */
     FREE(w->KKT->work5);            /* mywork->KKT->work5 = (pfloat *)MALLOC(nK*sizeof(pfloat));      */
     FREE(w->KKT->work6);            /* mywork->KKT->work6 = (pfloat *)MALLOC(nK*sizeof(pfloat));      */
+	FREE(w->KKT->work1_2);            /* mywork->KKT->work1 = (pfloat *)MALLOC(nK*sizeof(pfloat));      */
+	FREE(w->KKT->work2_2);            /* mywork->KKT->work2 = (pfloat *)MALLOC(nK*sizeof(pfloat));      */
+    FREE(w->KKT->work3_2);            /* mywork->KKT->work3 = (pfloat *)MALLOC(nK*sizeof(pfloat));      */
+    FREE(w->KKT->work4_2);            /* mywork->KKT->work4 = (pfloat *)MALLOC(nK*sizeof(pfloat));      */
+    FREE(w->KKT->work5_2);            /* mywork->KKT->work5 = (pfloat *)MALLOC(nK*sizeof(pfloat));      */
+    FREE(w->KKT->work6_2);            /* mywork->KKT->work6 = (pfloat *)MALLOC(nK*sizeof(pfloat));      */
 	FREE(w->KKT);                   /* mywork->KKT = (kkt *)MALLOC(sizeof(kkt));                      */
 	if (w->A) {
 		FREE(w->AtoK);
@@ -562,6 +570,23 @@ pwork* ECOS_setup(idxint n, idxint m, idxint p, idxint l, idxint ncones, idxint*
 	pfloat *Lpr;
 	spmat *At, *Gt, *KU;
 	idxint *AtoAt, *GtoGt, *AttoK, *GttoK;
+	char  *fn[80];
+
+	#ifdef PEOC_REORDER_PROTOCAL_SET
+	idxint	dma_sign_flag;
+	idxint	dma_col_cumsum_flag;
+	idxint	dma_row_cumsum_flag;
+
+	extern idxint	kkt_sign_flag;
+	extern idxint	kkt_factor_flag;
+	
+	idxint *Vec_Sign;
+	idxint *Vec_Col_cumsum;
+	idxint *Vec_Row_cumsum;
+	spmat	*Mat_Lt;
+	idxint	*LtoLt;
+	#endif
+
 
 #if PROFILING > 0
 	timer tsetup;
@@ -571,6 +596,8 @@ pwork* ECOS_setup(idxint n, idxint m, idxint p, idxint l, idxint ncones, idxint*
 	timer tcreatekkt;
 	timer tmattranspose;
 	timer tordering;
+	pfloat *t1;
+	pfloat *t2;
 #endif
 
 #if PROFILING > 0
@@ -885,7 +912,8 @@ pwork* ECOS_setup(idxint n, idxint m, idxint p, idxint l, idxint ncones, idxint*
     nK = KU->n;
 
 #if DEBUG > 0
-    dumpSparseMatrix(KU, "./data/db/Mat_KU_setup.txt");
+	sprintf(fn, "%sdb/Mat_KU_setup.txt",DATA_PATH);
+    dumpSparseMatrix(KU, fn);
 #endif
 #if PRINTLEVEL > 2
     PRINTTEXT("Dimension of KKT matrix: %d\n", (int)nK);
@@ -905,6 +933,13 @@ pwork* ECOS_setup(idxint n, idxint m, idxint p, idxint l, idxint ncones, idxint*
     mywork->KKT->work4 = (pfloat *)MALLOC(nK*sizeof(pfloat));
     mywork->KKT->work5 = (pfloat *)MALLOC(nK*sizeof(pfloat));
     mywork->KKT->work6 = (pfloat *)MALLOC(nK*sizeof(pfloat));
+	mywork->KKT->work1_2 = (pfloat *)MALLOC(nK*sizeof(pfloat));
+	mywork->KKT->work2_2 = (pfloat *)MALLOC(nK*sizeof(pfloat));
+    mywork->KKT->work3_2 = (pfloat *)MALLOC(nK*sizeof(pfloat));
+    mywork->KKT->work4_2 = (pfloat *)MALLOC(nK*sizeof(pfloat));
+    mywork->KKT->work5_2 = (pfloat *)MALLOC(nK*sizeof(pfloat));
+    mywork->KKT->work6_2 = (pfloat *)MALLOC(nK*sizeof(pfloat));
+
 	mywork->KKT->Flag = (idxint *)MALLOC(nK*sizeof(idxint));
 	mywork->KKT->Pattern = (idxint *)MALLOC(nK*sizeof(idxint));
 	mywork->KKT->Lnz = (idxint *)MALLOC(nK*sizeof(idxint));
@@ -959,17 +994,33 @@ pwork* ECOS_setup(idxint n, idxint m, idxint p, idxint l, idxint ncones, idxint*
 	pinv(nK, P, mywork->KKT->Pinv);
 	Pinv = mywork->KKT->Pinv;
 #if DEBUG > 0
-    dumpDenseMatrix_i(P, nK, 1, "./data/db/P.txt");
-    dumpDenseMatrix_i(mywork->KKT->Pinv, nK, 1, "./data/db/PINV.txt");
+	sprintf(fn, "%sdb/P.txt",DATA_PATH);
+    dumpDenseMatrix_i(P, nK, 1, fn);
+	sprintf(fn, "%sdb/PINV.txt",DATA_PATH);
+    dumpDenseMatrix_i(mywork->KKT->Pinv, nK, 1, fn);
 #endif
 	permuteSparseSymmetricMatrix(KU, mywork->KKT->Pinv, mywork->KKT->PKPt, mywork->KKT->PK);
 #if DEBUG > 0
-	dumpSparseMatrix(KU, "./data/db/KU_s0.txt");
-    dumpSparseMatrix(mywork->KKT->PKPt, "./data/db/PKPt_s0.txt");
-	dumpDenseMatrix_i(mywork->KKT->PK, KU->nnz, 1, "./data/db/KKT_PK_s0.txt");
+	sprintf(fn, "%sdb/KU_s0.txt",DATA_PATH);
+	dumpSparseMatrix(KU, fn);
+	sprintf(fn, "%sdb/PKPt_s0.txt",DATA_PATH);
+    dumpSparseMatrix(mywork->KKT->PKPt, fn);
+	sprintf(fn, "%sdb/KKT_PK_s0.txt",DATA_PATH);
+	dumpDenseMatrix_i(mywork->KKT->PK, KU->nnz, 1, fn);
 #endif
 	/* permute sign vector */
     for( i=0; i<nK; i++ ){ mywork->KKT->Sign[Pinv[i]] = Sign[i]; }
+	
+	//
+	if (kkt_sign_flag == 0){
+		Vec_Sign = (idxint *)MALLOC(((mywork->KKT->PKPt->m)+4)*sizeof(idxint));
+		dma_sign_flag = kkt_sign_fpga(Vec_Sign,mywork->KKT->Sign,(mywork->KKT->PKPt->m));
+		kkt_sign_flag = 1;
+
+		sprintf(fn, "%sdb/fpga/Sign_initial.txt", DATA_PATH);
+		dumpVecSign_hw_imp(Vec_Sign, 1, mywork->KKT->PKPt->m,fn);
+	}
+
 #if PRINTLEVEL > 3
     PRINTTEXT("P = [");
     for( i=0; i<nK; i++ ){ PRINTTEXT("%d ", (int)P[i]); }
@@ -1011,6 +1062,64 @@ pwork* ECOS_setup(idxint n, idxint m, idxint p, idxint l, idxint ncones, idxint*
 	Lir = (idxint *)MALLOC(lnz*sizeof(idxint));
 	Lpr = (pfloat *)MALLOC(lnz*sizeof(pfloat));
 	mywork->KKT->L = ecoscreateSparseMatrix(nK, nK, lnz, Ljc, Lir, Lpr);
+
+#ifdef PEOC_REORDER_PROTOCAL_SET
+
+	if (kkt_factor_flag == 0){
+
+	//
+	LDL_numeric2(
+				mywork->KKT->PKPt->n,	/* K and L are n-by-n, where n >= 0 */
+				mywork->KKT->PKPt->jc,	/* input of size n+1, not modified */
+				mywork->KKT->PKPt->ir,	/* input of size nz=Kjc[n], not modified */
+				mywork->KKT->PKPt->pr,	/* input of size nz=Kjc[n], not modified */
+				mywork->KKT->L->jc,	/* input of size n+1, not modified */
+				mywork->KKT->Parent,	/* input of size n, not modified */
+				mywork->KKT->Sign,     /* input, permuted sign vector for regularization */
+                mywork->stgs->eps,     /* input, inverse permutation vector */
+				mywork->stgs->delta,   /* size of dynamic regularization */
+				mywork->KKT->Lnz,		/* output of size n, not defn. on input */
+				mywork->KKT->L->ir,	/* output of size lnz=Lp[n], not defined on input */
+				mywork->KKT->L->pr,	/* output of size lnz=Lp[n], not defined on input */
+				mywork->KKT->D,		/* output of size n, not defined on input */
+				mywork->KKT->work1,	/* workspace of size n, not defn. on input or output */
+				mywork->KKT->Pattern,  /* workspace of size n, not defn. on input or output */
+				mywork->KKT->Flag	    /* workspace of size n, not defn. on input or output */
+	#if PROFILING > 1
+                ,&mywork->info->tfactor_t1, 
+				&mywork->info->tfactor_t2
+	#endif
+    );
+
+	LtoLt	= MALLOC(mywork->KKT->L->nnz*sizeof(idxint));
+	Mat_Lt	= transposeSparseMatrix(mywork->KKT->L, LtoLt);
+	
+	//-MatPKPt_initial-
+	sprintf(fn, "%sdb/fpga/MatPKPt_initial.txt", DATA_PATH);
+	dumpSparseMatrix(mywork->KKT->PKPt, fn);
+
+	//ps->pl  COL_CUMSUM info
+	Vec_Col_cumsum		= (idxint *) MALLOC(((mywork->KKT->L->m)+4)*sizeof(idxint));
+	dma_col_cumsum_flag = kkt_col_cumsum_fpga(Vec_Col_cumsum,mywork->KKT->L->jc,(mywork->KKT->L->m));
+	sprintf(fn, "%sdb/fpga/MatL_initial.txt", DATA_PATH);
+	dumpSparseMatrix(mywork->KKT->L, fn);
+
+	//ps->pl  ROW_CUMSUM info
+	Vec_Row_cumsum		= (idxint *) MALLOC(((Mat_Lt->m)+4)*sizeof(idxint));
+	dma_row_cumsum_flag = kkt_row_cumsum_fpga(Vec_Col_cumsum,Mat_Lt->jc,(Mat_Lt->m));
+	sprintf(fn, "%sdb/fpga/MatLt_initial.txt", DATA_PATH);
+	dumpSparseMatrix(Mat_Lt, fn);
+
+	kkt_factor_flag = 1;
+
+	free(LtoLt);
+	free(Mat_Lt);
+
+	}
+
+#endif
+
+
 #if PRINTLEVEL > 2
 	PRINTTEXT("Created Cholesky factor of K in KKT struct\n");
 #endif
@@ -1019,7 +1128,8 @@ pwork* ECOS_setup(idxint n, idxint m, idxint p, idxint l, idxint ncones, idxint*
 	/* permute KKT matrix - we work on this one from now on */
 	permuteSparseSymmetricMatrix(KU, mywork->KKT->Pinv, mywork->KKT->PKPt, NULL);
 #if DEBUG > 0
-    dumpSparseMatrix(mywork->KKT->PKPt, "./data/db/PKPt_setup.txt");
+	sprintf(fn, "%sdb/PKPt_setup.txt",DATA_PATH);
+    dumpSparseMatrix(mywork->KKT->PKPt,fn);
 #endif
 
 	/* get memory for residuals */
@@ -1043,6 +1153,21 @@ pwork* ECOS_setup(idxint n, idxint m, idxint p, idxint l, idxint ncones, idxint*
 #if PROFILING > 0
 	mywork->info->tsetup = toc(&tsetup);
 #endif
+
+
+#if DEBUG > 0
+	sprintf(fn, "%sdb/Con_exit/origin_A.txt",DATA_PATH);
+    dumpSparseMatrix(mywork->A,fn);
+	sprintf(fn, "%sdb/Con_exit/origin_G.txt",DATA_PATH);
+    dumpSparseMatrix(mywork->G,fn);
+	sprintf(fn, "%sdb/Con_exit/origin_c.txt",DATA_PATH);
+    dumpDenseMatrix(mywork->c,mywork->n,1,fn);
+	sprintf(fn, "%sdb/Con_exit/origin_b.txt",DATA_PATH);
+    dumpDenseMatrix(mywork->b,mywork->p,1,fn);
+	sprintf(fn, "%sdb/Con_exit/origin_h.txt",DATA_PATH);
+    dumpDenseMatrix(mywork->h,mywork->m,1,fn);
+#endif
+
 
     return mywork;
 }

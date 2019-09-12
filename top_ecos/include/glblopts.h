@@ -24,12 +24,14 @@
 #ifndef __GLBLOPTS_H__
 #define __GLBLOPTS_H__
 
+#define DATA_PATH "../data/"
 
 
 #define ZCU102_HW_IMP					//实现平台为zcu102
-#define PARALLEL_COMPUTE				//硬件并行计算处理流程与对应数据产生，将可以并行处理的代码放在一起
+#define PEOC_REORDER_PROTOCAL_SET		//硬件并行计算处理流程与对应数据产生，将可以并行处理的代码放在一起
 #define KKT_FACTOR_PL_PROCESS 0			//1 使能Pl完成fpga完成kkt_factor操作
 #define KKT_SOLVE_PL_PROCESS 0			//1 使能Pl完成fpga完成kkt_solve操作
+#define KKT_SOLVE_PARALLEL
 
 //#define COMM_LOOP_TEST				//回环通讯测试
 
@@ -57,7 +59,7 @@
                            /* (flag used only for development)           */
 
 
-#define DUMP_EN (0)		   /*0 No enable				                 */
+//#define DEBUG (1)		   /*0 No enable				                 */
 						   /*1 enable                                    */
 
 #define CONFIG_DATA_LOAD_MODE  (5)		//0 load config data from config.txt  <github default>
@@ -81,22 +83,6 @@
 	#define G_NNZ_LEN 352				// <Earth Landing>
 	#define A_NNZ_LEN 840								
 #endif
-
-
-#if  ( CONFIG_DATA_LOAD_MODE  == (0) || CONFIG_DATA_LOAD_MODE  == (1) )
-
-#elif( CONFIG_DATA_LOAD_MODE  == (2) || CONFIG_DATA_LOAD_MODE  == (3) )
-
-#elif( CONFIG_DATA_LOAD_MODE  == (4) || CONFIG_DATA_LOAD_MODE  == (5) )
-
-#if (CONEMODE == (1))	
-#define L_NNZ 2974	
-#else
-#define L_NNZ 29	
-#endif
-
-#endif
-/**/
 
 
 #if CONFIG_DATA_LOAD_MODE  == (0)

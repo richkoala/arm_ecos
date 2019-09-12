@@ -76,6 +76,137 @@ int DMA_COMM_TEST()
 #endif
 }
 
+int kkt_sign_fpga(
+		int* Vec_Sign,
+		int* Sign,
+		int  Sign_len
+		)
+{
+
+	//Sign帧头参数
+	Vec_Sign[0] = CMDT_LDL_SIGN;
+	Vec_Sign[1] = (Sign_len+4)*4;
+	Vec_Sign[2] = 0;
+	Vec_Sign[3]	= 0;
+	memcpy(&Vec_Sign[4],Sign,sizeof(int)*Sign_len);
+
+#ifndef ZCU102_HW_IMP 
+	return 2;
+#elif KKT_FACTOR_PL_PROCESS == 0
+	return 3;
+#else
+	u32 Dma_tx_status;
+	int Dma_tx_len;
+
+	//==========================================//
+	//==========KKT send KKT_sign info==========//
+	//==========================================//
+
+	Dma_tx_len = Vec_Sign[1];	//int32 4B
+	Xil_DCacheFlushRange((u32)Vec_Sign, Dma_tx_len);
+	Dma_tx_status = XAxiDma_SimpleTransfer(&AxiDma, (u32)Vec_Sign, Dma_tx_len , XAXIDMA_DMA_TO_DEVICE);
+
+	if (Dma_tx_status != XST_SUCCESS) {
+		return XST_FAILURE;
+	}
+	while (!Dma_tx_done)
+	{
+	}
+	Dma_tx_done = 0;
+
+	return XST_SUCCESS;
+
+#endif
+}
+
+int kkt_col_cumsum_fpga(
+		int* Vec_Col_cumsum,
+		int* Col_cumsum,
+		int  Col_cumsum_len
+		)
+{
+
+	//Sign帧头参数
+	Vec_Col_cumsum[0] = CMDT_INFO_MatL_COLNUM;
+	Vec_Col_cumsum[1] = (Col_cumsum_len+4)*4;
+	Vec_Col_cumsum[2] = 0;
+	Vec_Col_cumsum[3] = 0;
+	memcpy(&Vec_Col_cumsum[4],Col_cumsum,sizeof(int)*Col_cumsum_len);
+
+#ifndef ZCU102_HW_IMP 
+	return 2;
+#elif KKT_FACTOR_PL_PROCESS == 0
+	return 3;
+#else
+	u32 Dma_tx_status;
+	int Dma_tx_len;
+
+	//==========================================//
+	//==========KKT send KKT_sign info==========//
+	//==========================================//
+
+	Dma_tx_len = Vec_Col_cumsum[1];	//int32 4B
+	Xil_DCacheFlushRange((u32)Col_cumsum, Dma_tx_len);
+	Dma_tx_status = XAxiDma_SimpleTransfer(&AxiDma, (u32)Vec_Col_cumsum, Dma_tx_len , XAXIDMA_DMA_TO_DEVICE);
+
+	if (Dma_tx_status != XST_SUCCESS) {
+		return XST_FAILURE;
+	}
+	while (!Dma_tx_done)
+	{
+	}
+	Dma_tx_done = 0;
+
+	return XST_SUCCESS;
+
+#endif
+}
+
+int kkt_row_cumsum_fpga(
+		int* Vec_Row_cumsum,
+		int* Row_cumsum,
+		int  Row_cumsum_len
+		)
+{
+
+	//Sign帧头参数
+	Vec_Row_cumsum[0] = CMDT_INFO_MatL_COLNUM;
+	Vec_Row_cumsum[1] = (Row_cumsum_len+4)*4;
+	Vec_Row_cumsum[2] = 0;
+	Vec_Row_cumsum[3] = 0;
+	memcpy(&Vec_Row_cumsum[4],Row_cumsum,sizeof(int)*Row_cumsum_len);
+
+#ifndef ZCU102_HW_IMP 
+	return 2;
+#elif KKT_FACTOR_PL_PROCESS == 0
+	return 3;
+#else
+	u32 Dma_tx_status;
+	int Dma_tx_len;
+
+	//==========================================//
+	//==========KKT send KKT_sign info==========//
+	//==========================================//
+
+	Dma_tx_len = Vec_Row_cumsum[1];	//int32 4B
+	Xil_DCacheFlushRange((u32)Col_cumsum, Dma_tx_len);
+	Dma_tx_status = XAxiDma_SimpleTransfer(&AxiDma, (u32)Vec_Row_cumsum, Dma_tx_len , XAXIDMA_DMA_TO_DEVICE);
+
+	if (Dma_tx_status != XST_SUCCESS) {
+		return XST_FAILURE;
+	}
+	while (!Dma_tx_done)
+	{
+	}
+	Dma_tx_done = 0;
+
+	return XST_SUCCESS;
+
+#endif
+}
+
+
+
 int kkt_factor_fpga(
 		ps2pl_sop Sop,	
 		double dat_eps,
@@ -89,7 +220,6 @@ int kkt_factor_fpga(
 		)
 {
 
-	int 		 debug_info;
 //====================帧协议=======================//
 	//MatA帧头参数
 	DeM_A[0].frame_id_or_row  = Sop.frame_id;
@@ -107,8 +237,10 @@ int kkt_factor_fpga(
 	Vec_Sign[3]	= Sop.iter_num;
 	memcpy(&Vec_Sign[4],Sign,sizeof(int)*Sign_len);
 
-#ifndef ZCU102_HW_IMP
+#ifndef ZCU102_HW_IMP 
 	return 2;
+#elif KKT_FACTOR_PL_PROCESS == 0
+	return 3;
 #else
 	u32 Dma_rx_status;
 	u32 Dma_tx_status;
@@ -121,7 +253,7 @@ int kkt_factor_fpga(
 		Sop.frame_id == CMDTR_LDL_MatA_ITER   ||
 		Sop.frame_id == CMDTR_LDL_MatA_T_ITER 
 		) {
-		Dma_rx_len = (LD_nz*16 + 4);			//需要添加Sign的长度信息
+		Dma_rx_len = (LD_nz*16 + 16);			//调试回读LD矩阵信息
 		Xil_DCacheInvalidateRange((u32)Dma_LD_buffer, (Dma_rx_len/64+1)*64);
 		Dma_rx_status = XAxiDma_SimpleTransfer(&AxiDma, (u32) Dma_LD_buffer	,	Dma_rx_len	, XAXIDMA_DEVICE_TO_DMA);
 		if (Dma_rx_status != XST_SUCCESS) {
@@ -200,7 +332,9 @@ int kkt_solve_fpga(
 	memcpy(&b[2],Pb,sizeof(devec_struct)*b_len);
 
 #ifndef ZCU102_HW_IMP
-	return 2;				
+	return 2;		
+#elif KKT_SOLVE_PL_PROCESS == 0
+	return 3;
 #else
 	u32 Dma_rx_status;
 	u32 Dma_tx_status;
@@ -214,7 +348,7 @@ int kkt_solve_fpga(
 		Sop.frame_id == CMDTR_CAL_Vecb_INIT2   ||
 		Sop.frame_id == CMDTR_CAL_Vecb_ITER1   ||
 		Sop.frame_id == CMDTR_CAL_Vecb_ITER2   ||
-		Sop.frame_id == CMDT_CAL_Vecb_ITER3
+		Sop.frame_id == CMDTR_CAL_Vecb_ITER3
 			)
 		Dma_rx_len = 2*b_len*8+16;
 	//2）正常模式下读取回代x处理结果
@@ -251,6 +385,70 @@ int kkt_solve_fpga(
 
 }
 
+int kkt_solve_fpga_p(
+		double* Pb1,
+		double* Pb2,
+		devec_struct* Pb,
+		int b_len,
+		ps2pl_sop Sop,
+		devec_struct* Px)
+
+{
+	//帧头参数
+	int i;
+	Pb[0].frame_id_or_cnt 		= Sop.frame_id;
+	Pb[0].frame_len_or_iter_num = Sop.frame_len;
+	Pb[1].frame_id_or_cnt 		= Sop.cnt;
+	Pb[1].frame_len_or_iter_num = Sop.iter_num;
+	for (i=0;i<(b_len/2);i++){
+		Pb[2*i+2].double_data1 = Pb2[i];		//高位地址为Pb2
+		Pb[2*i+3].double_data1 = Pb1[i];		//高位地址为Pb1
+	}
+	
+#ifndef ZCU102_HW_IMP
+	return 2;		
+#elif KKT_SOLVE_PL_PROCESS == 0
+	return 3;
+#else
+	u32 Dma_rx_status;
+	u32 Dma_tx_status;
+	int Dma_rx_len;
+	int Dma_tx_len;
+	int i;
+
+	//读取PL逻辑处理结果
+	//2）正常模式下读取2次x处理结果
+	Dma_rx_len = Sop.frame_len;
+
+	Xil_DCacheInvalidateRange((u32)x, (Dma_rx_len/64+1)*64);
+	Dma_rx_status = XAxiDma_SimpleTransfer(&AxiDma,(u32) Px,Dma_rx_len, XAXIDMA_DEVICE_TO_DMA);
+	if (Dma_rx_status != XST_SUCCESS) {
+		return XST_FAILURE;
+	}
+	//将sop+b参数由DDR发送至PL逻辑
+
+	Dma_tx_len = Sop.frame_len;
+	Xil_DCacheFlushRange((u32)b, Sop.frame_len);
+	Dma_tx_status = XAxiDma_SimpleTransfer(&AxiDma, (u32) Pb, Dma_tx_len , XAXIDMA_DMA_TO_DEVICE);
+
+	if (Dma_tx_status != XST_SUCCESS)
+		return XST_FAILURE;
+
+	if (Dma_rx_status != XST_SUCCESS)
+		return XST_FAILURE;
+
+	while (!Dma_rx_done ||!Dma_tx_done) {
+			/* NOP */
+	}
+
+	Dma_rx_done = 0;
+	Dma_tx_done = 0;
+
+	return XST_SUCCESS;
+
+#endif
+
+}
 
 
 
